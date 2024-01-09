@@ -58,7 +58,7 @@ def train(model, data_loader, criterion, optimizer, device='cpu'):
     return running_loss
 
 
-def train_save_model(train_loader, test_loader, model_name, optim_name, learning_rate, num_epochs, device, path):
+def train_save_model(train_loader, test_loader, model_name, num_epochs, ATmethod, device, path):
     start = time.time()
 
     num_classes = max(train_loader.dataset.targets) + 1  # if args.num_classes is None else args.num_classes
@@ -67,25 +67,42 @@ def train_save_model(train_loader, test_loader, model_name, optim_name, learning
     elif model_name == 'ResNet18':
         model = resnet18(num_classes=num_classes).to(device)
 
-    criterion = nn.CrossEntropyLoss()
+
     optimizer = optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=2e-4)
     best_robust_acc = 0
-
+    best_clean_acc = 0
     for epo in range(num_epochs):
         model.train()
-        torchattackPGD = torchattacks.PGD(model, eps=8/255, alpha=2/255, steps=10, random_start=True)
+
+        if ATmethod == 'PGD':
+            innerloss = torchattacks.PGD(model, eps=8/255, alpha=2/255, steps=10, random_start=True)
+        elif ATmethod == 'TRADES':
+            innerloss = torchattacks.TPGD(model, eps=8/255, alpha=2/255, steps=10, random_start=True)
+        else:
+            raise NotImplementedError
+        
         with tqdm(train_loader) as pbar:
             pbar.set_description(f'Epoch - {epo}')
             for step, (batch_x, batch_y) in enumerate(pbar):
+                N,_,_,_ = batch_x.shape
                 batch_x = batch_x.to(device)
                 batch_y = batch_y.to(device)
 
-                inputs_adv = torchattackPGD(batch_x, batch_y)
+                inputs_adv = innerloss(batch_x, batch_y)
                 optimizer.zero_grad()
                 output = model(inputs_adv) 
 
-                loss = criterion(output, batch_y) 
-
+                if ATmethod == 'PGD':
+                    criterion = nn.CrossEntropyLoss()
+                    loss = criterion(output, batch_y)
+                elif ATmethod == 'TRADES':
+                    criterion_kl = nn.KLDivLoss(reduction='sum')
+                    loss_natural = F.cross_entropy(model(batch_x), batch_y)
+                    loss_robust = (1.0 / N) * criterion_kl(F.log_softmax(output, dim=1), F.softmax(model(batch_x), dim=1))
+                    loss = loss_natural + 6 * loss_robust 
+                else:
+                    raise NotImplementedError
+                
                 pbar.set_postfix(loss = loss.item())
 
                 loss.backward()
@@ -105,6 +122,8 @@ def train_save_model(train_loader, test_loader, model_name, optim_name, learning
             model.eval()
             for step,(batch_x, batch_y) in enumerate(test_loader):
                 torchattackPGD_eval = torchattacks.PGD(model, eps=8/255, alpha=2/255, steps=20, random_start=True)
+                batch_x = batch_x.to(device)
+                batch_y = batch_y.to(device)
                 inputs_adv = torchattackPGD_eval(batch_x, batch_y)
                 with torch.no_grad():
                     output = model(batch_x)
@@ -127,11 +146,12 @@ def train_save_model(train_loader, test_loader, model_name, optim_name, learning
             print('PGD20 acc:{}'.format(test_acc_adv))
             if test_acc_adv >= best_robust_acc:
                 best_robust_acc = test_acc_adv
+                best_clean_acc = test_acc
                 # state = {'net':model.state_dict(), 'features': feature_exct.state_dict()}
                 torch.save(model, '{}.pth'.format(path))
     end = time.time()
     print('training time:', end-start, 's')
-    return model
+    return model, best_clean_acc, best_robust_acc
 
 
 def test(model, loader):
