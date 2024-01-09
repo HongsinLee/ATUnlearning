@@ -21,6 +21,8 @@ if __name__ == '__main__':
     parser.add_argument('--method', type=str, default='boundary_shrink',
                         choices=['boundary_shrink', 'boundary_expanding'], help='unlearning method')
     parser.add_argument('--ATmethod', type=str, default='PGD', help='unlearning method')
+    parser.add_argument('--unlearn_innerloss', type=str, default='FGSM', help='unlearning method')
+    parser.add_argument('--unlearn_ATmethod', type=str, default='PGD', help='unlearning method')
     parser.add_argument('--data_name', type=str, default='cifar10', choices=['mnist', 'cifar10'],
                         help='dataset, mnist or cifar10')
     parser.add_argument('--model_name', type=str, default='ResNet18', choices=['MNISTNet', 'AllCNN', 'ResNet18'], help='model name')
@@ -71,7 +73,7 @@ if __name__ == '__main__':
 
         print('\noriginal model acc:{:.4f}, PGD acc: {:.4f}, AutoAttack acc: {}'.format(ori_clean_acc, ori_robust_acc, AA_acc))
         file = open(path + "accuracy_summary.txt", 'a')
-        file.write('original model \t\t\t\t Clean acc:{:.4f}, PGD acc: {:.4f}, AutoAttack acc: {}\n'.format(ori_clean_acc, ori_robust_acc, AA_acc))
+        file.write('original model \t\t\t\t\t Clean acc:{:.4f}, PGD acc: {:.4f}, AutoAttack acc: {}\n'.format(ori_clean_acc, ori_robust_acc, AA_acc))
         file.close()
     elif args.train_or_unlearning == "retrain":
         print('=' * 100)
