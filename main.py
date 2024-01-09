@@ -21,16 +21,16 @@ if __name__ == '__main__':
                         choices=['boundary_shrink', 'boundary_expanding'], help='unlearning method')
     parser.add_argument('--data_name', type=str, default='cifar10', choices=['mnist', 'cifar10'],
                         help='dataset, mnist or cifar10')
-    parser.add_argument('--model_name', type=str, default='AllCNN', choices=['MNISTNet', 'AllCNN'], help='model name')
+    parser.add_argument('--model_name', type=str, default='ResNet18', choices=['MNISTNet', 'AllCNN', 'ResNet18'], help='model name')
     parser.add_argument('--optim_name', type=str, default='sgd', choices=['sgd', 'adam'], help='optimizer name')
-    parser.add_argument('--lr', type=float, default=0.01, help='learning rate')
-    parser.add_argument('--epoch', type=int, default=50, help='training epoch')
+    parser.add_argument('--lr', type=float, default=0.1, help='learning rate')
+    parser.add_argument('--epoch', type=int, default=200, help='training epoch')
     parser.add_argument('--forget_class', type=int, default=4, help='forget class')
-    parser.add_argument('--dataset_dir', type=str, default='./data', help='dataset directory')
+    parser.add_argument('--dataset_dir', type=str, default='/mnt/server7_hard3/hongsin/dataset', help='dataset directory')
     parser.add_argument('--checkpoint_dir', type=str, default='./checkpoints',
                         help='checkpoints directory')
-    parser.add_argument('--batch_size', type=int, default=64, help='batch size')
-    parser.add_argument('--train', action='store_true', help='Train model from scratch')
+    parser.add_argument('--batch_size', type=int, default=128, help='batch size')
+    parser.add_argument('--train_or_load', type=str, help='Train model from scratch')
     parser.add_argument('--evaluation', action='store_true', help='evaluate unlearn model')
     parser.add_argument('--extra_exp', type=str, help='optional extra experiment for boundary shrink',
                         choices=['curv', 'weight_assign', None])
@@ -50,26 +50,33 @@ if __name__ == '__main__':
     train_forget_index, train_remain_index, test_forget_index, test_remain_index \
         = get_unlearn_loader(trainset, testset, forget_class, args.batch_size, num_forget)
 
-    if args.train:
+    if args.train_or_load == "train":
         print('=' * 100)
         print(' ' * 25 + 'train original model and retrain model from scratch')
         print('=' * 100)
         ori_model = train_save_model(train_loader, test_loader, args.model_name, args.optim_name, args.lr,
                                      args.epoch, device, path + args.data_name + "_original_model")
-        print('\noriginal model acc:\n', test(ori_model, test_loader))
         retrain_model = train_save_model(train_remain_loader, test_remain_loader, args.model_name, args.optim_name,
                                          args.lr, args.epoch, device, path + args.data_name + "_retrain_model")
-        print('\nretrain model acc:\n', test(retrain_model, test_loader))
+        
+        test_acc, test_acc_adv = test(ori_model, test_loader)
+        print('\noriginal model acc:{}, PGD acc: {}'.format(test_acc, test_acc_adv))
+        retrain_test_acc, retrain_test_acc_adv = test(retrain_model, test_loader)
+        print('\nretrain model acc:{}, PGD acc: {}'.format(retrain_test_acc, retrain_test_acc_adv))
     else:
         print('=' * 100)
         print(' ' * 25 + 'load original model and retrain model')
         print('=' * 100)
         ori_model = torch.load('{}.pth'.format(path + args.data_name + "_original_model"),
                                map_location=torch.device('cpu')).to(device)
-        print('\noriginal model acc:\n', test(ori_model, test_loader))
         retrain_model = torch.load('{}.pth'.format(
             path + args.data_name + "_retrain_model"), map_location=torch.device('cpu')).to(device)
-        print('\nretrain model acc:\n', test(retrain_model, test_loader))
+        
+        test_acc, test_acc_adv = test(ori_model, test_loader)
+        print('\noriginal model acc:{}, PGD acc: {}'.format(test_acc, test_acc_adv))
+        retrain_test_acc, retrain_test_acc_adv = test(retrain_model, test_loader)
+        print('\nretrain model acc:{}, PGD acc: {}'.format(retrain_test_acc, retrain_test_acc_adv))
+
 
     if args.method == 'boundary_shrink':
         print('*' * 100)

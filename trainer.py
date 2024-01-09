@@ -4,9 +4,12 @@ import torch
 from torch import nn, optim
 from tqdm import tqdm
 from models import AllCNN
+from cifar10_models import *
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+import numpy as np
 
+import torchattacks
 
 def loss_picker(loss):
     if loss == 'mse':
@@ -31,25 +34,23 @@ def optimizer_picker(optimization, param, lr, momentum=0.):
     return optimizer
 
 
-def train(model, data_loader, criterion, optimizer, loss_mode, device='cpu'):
+
+def train(model, data_loader, criterion, optimizer, device='cpu'):
     running_loss = 0
     model.train()
+    torchattackPGD = torchattacks.PGD(model, eps=8/255, alpha=2/255, steps=10, random_start=True)
     for step, (batch_x, batch_y) in enumerate(tqdm(data_loader)):
         # print(batch_y.size())
 
         batch_x = batch_x.to(device)
         batch_y = batch_y.to(device)
-        optimizer.zero_grad()
-        output = model(batch_x)  # get predict label of batch_x
 
-        if loss_mode == "mse":
-            loss = criterion(output, batch_y)  # mse loss
-        elif loss_mode == "cross":
-            # print(batch_y)
-            # print(output)
-            loss = criterion(output, batch_y)  # torch.argmax(batch_y, dim=1))  # cross entropy loss
-        elif loss_mode == 'neg_grad':
-            loss = -criterion(output, batch_y)
+        inputs_adv = torchattackPGD(batch_x, batch_y)
+        optimizer.zero_grad()
+        output = model(inputs_adv)  # get predict label of batch_x
+
+        loss = criterion(output, batch_y)  # mse loss
+
 
         loss.backward()
         optimizer.step()
@@ -63,59 +64,106 @@ def train_save_model(train_loader, test_loader, model_name, optim_name, learning
     num_classes = max(train_loader.dataset.targets) + 1  # if args.num_classes is None else args.num_classes
     if model_name == 'AllCNN':
         model = AllCNN(n_channels=3, num_classes=num_classes, filters_percentage=0.5).to(device)
+    elif model_name == 'ResNet18':
+        model = resnet18(num_classes=num_classes).to(device)
 
-    criterion = loss_picker('cross')
-    optimizer = optimizer_picker(optim_name, model.parameters(), lr=learning_rate, momentum=0.9)
-
-    best_acc = 0
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=2e-4)
+    best_robust_acc = 0
 
     for epo in range(num_epochs):
-        print('EPOCH:{}'.format(epo))
-        train(model=model, data_loader=train_loader, criterion=criterion, optimizer=optimizer, loss_mode='cross',
-              device=device)
-        _, acc = eval(model=model, data_loader=test_loader, mode='', print_perform=False, device=device)
-        print('test acc:{}'.format(acc))
+        model.train()
+        torchattackPGD = torchattacks.PGD(model, eps=8/255, alpha=2/255, steps=10, random_start=True)
+        with tqdm(train_loader) as pbar:
+            pbar.set_description(f'Epoch - {epo}')
+            for step, (batch_x, batch_y) in enumerate(pbar):
+                batch_x = batch_x.to(device)
+                batch_y = batch_y.to(device)
 
-        if acc >= best_acc:
-            best_acc = acc
-            # state = {'net':model.state_dict(), 'features': feature_exct.state_dict()}
-            torch.save(model, '{}.pth'.format(path))
+                inputs_adv = torchattackPGD(batch_x, batch_y)
+                optimizer.zero_grad()
+                output = model(inputs_adv) 
 
+                loss = criterion(output, batch_y) 
+
+                pbar.set_postfix(loss = loss.item())
+
+                loss.backward()
+                optimizer.step()
+
+        
+        if epo in [100, 150]:
+            for param_group in optimizer.param_groups:
+                param_group['lr'] *= 0.1
+
+
+
+
+        if epo%1 == 0 :
+            test_accs = []
+            test_accs_adv = []
+            model.eval()
+            for step,(batch_x, batch_y) in enumerate(test_loader):
+                torchattackPGD_eval = torchattacks.PGD(model, eps=8/255, alpha=2/255, steps=20, random_start=True)
+                inputs_adv = torchattackPGD_eval(batch_x, batch_y)
+                with torch.no_grad():
+                    output = model(batch_x)
+                    output_adv = model(inputs_adv)
+            
+                predictions_adv = np.argmax(output_adv.cpu().detach().numpy(),axis=1)
+                predictions_adv = predictions_adv - batch_y.cpu().detach().numpy()
+                
+                predictions = np.argmax(output.cpu().detach().numpy(),axis=1)
+                predictions = predictions - batch_y.cpu().detach().numpy()
+                
+                test_accs = test_accs + predictions.tolist()
+                test_accs_adv = test_accs_adv + predictions_adv.tolist()
+            test_accs = np.array(test_accs)
+            test_accs_adv = np.array(test_accs_adv)
+            test_acc = np.sum(test_accs==0)/len(test_accs)
+            test_acc_adv = np.sum(test_accs_adv==0)/len(test_accs_adv)
+
+            print('test acc:{}'.format(test_acc))
+            print('PGD20 acc:{}'.format(test_acc_adv))
+            if test_acc_adv >= best_robust_acc:
+                best_robust_acc = test_acc_adv
+                # state = {'net':model.state_dict(), 'features': feature_exct.state_dict()}
+                torch.save(model, '{}.pth'.format(path))
     end = time.time()
     print('training time:', end-start, 's')
     return model
 
 
 def test(model, loader):
+    test_accs = []
+    test_accs_adv = []
     model.eval()
-    outputavg = [0.] * 10
-    cnt = [0] * 10
-    res = ''
-    with torch.no_grad():
-        for idx, (data, target) in enumerate(tqdm(loader, leave=False)):
-            # target = target.item()
+    for step,(batch_x, batch_y) in enumerate(loader):
+        torchattackPGD_eval = torchattacks.PGD(model, eps=8/255, alpha=2/255, steps=20, random_start=True)
+        inputs_adv = torchattackPGD_eval(batch_x, batch_y)
+        with torch.no_grad():
+            output = model(batch_x)
+            output_adv = model(inputs_adv)
+    
+        predictions_adv = np.argmax(output_adv.cpu().detach().numpy(),axis=1)
+        predictions_adv = predictions_adv - batch_y.cpu().detach().numpy()
+        
+        predictions = np.argmax(output.cpu().detach().numpy(),axis=1)
+        predictions = predictions - batch_y.cpu().detach().numpy()
+        
+        test_accs = test_accs + predictions.tolist()
+        test_accs_adv = test_accs_adv + predictions_adv.tolist()
+    test_accs = np.array(test_accs)
+    test_accs_adv = np.array(test_accs_adv)
+    test_acc = np.sum(test_accs==0)/len(test_accs)
+    test_acc_adv = np.sum(test_accs_adv==0)/len(test_accs_adv)
 
-            data = data.cuda()
-            target = target.cuda()
-
-            output = model(data)
-            output = F.softmax(output, dim=-1).data.cpu().numpy().tolist()
-            for i in range(len(target)):
-                pred = target[i].cpu().int()
-                if round(output[i][pred]) == 1:
-                    outputavg[pred] += 1
-                cnt[pred] += 1
-
-    for i in range(len(outputavg)):
-        if cnt[i] == 0:
-            outputavg[i] = 0.
-        else:
-            outputavg[i] /= cnt[i]
-        res += 'class {} acc: {:.2%}\n'.format(i, outputavg[i])
-    return res
+    print('test acc:{}'.format(test_acc))
+    print('PGD20 acc:{}'.format(test_acc_adv))
+    return test_acc, test_acc_adv
 
 
-def eval(model, data_loader, batch_size=64, mode='backdoor', print_perform=False, device='cpu', name=''):
+def eval(model, data_loader, mode='backdoor', print_perform=False, device='cpu', name=''):
     model.eval()  # switch to eval status
 
     y_true = []
