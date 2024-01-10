@@ -58,7 +58,7 @@ def AT_boundary_shrink(ori_model, train_forget_loader, dt, dv, test_loader, devi
     if unlearn_ATmethod == 'PGD':
         ATinner = torchattacks.PGD(test_model, eps=8/255, alpha=2/255, steps=10, random_start=True)
     elif unlearn_ATmethod == 'TRADES':
-        ATinner = torchattacks.TPGD(test_model, eps=8/255, alpha=2/255, steps=10, random_start=True)
+        ATinner = torchattacks.TPGD(test_model, eps=8/255, alpha=2/255, steps=10)
     elif unlearn_ATmethod == 'Nat':
         ATinner = torchattacks.VANILA(test_model)
     else:
@@ -122,17 +122,12 @@ def AT_boundary_shrink(ori_model, train_forget_loader, dt, dv, test_loader, devi
     test_forget_loader, test_remain_loader = utils.get_forget_loader(dv, forget_class)
     _, train_remain_loader = utils.get_forget_loader(dt, forget_class)
 
-    mode = 'pruned' if evaluate else ''
-    test_acc, test_acc_adv = robust_eval(model=unlearn_model, data_loader=test_loader, mode=mode, print_perform=evaluate, device=device,
-                       name='test set all class')
-    forget_acc, forget_acc_adv = robust_eval(model=unlearn_model, data_loader=test_forget_loader, mode=mode, print_perform=evaluate,
-                         device=device, name='test set forget class')
-    remain_acc, remain_acc_adv = robust_eval(model=unlearn_model, data_loader=test_remain_loader, mode=mode, print_perform=evaluate,
-                         device=device, name='test set remain class')
-    train_forget_acc, train_forget_acc_adv = robust_eval(model=unlearn_model, data_loader=train_forget_loader, mode=mode, print_perform=evaluate,
-                               device=device, name='train set forget class')
-    train_remain_acc, train_remain_acc_adv = robust_eval(model=unlearn_model, data_loader=train_remain_loader, mode=mode, print_perform=evaluate,
-                               device=device, name='train set remain class')
+    test_acc, test_acc_adv = robust_eval(model=unlearn_model, data_loader=test_loader, device=device)
+    forget_acc, forget_acc_adv = robust_eval(model=unlearn_model, data_loader=test_forget_loader,device=device)
+    remain_acc, remain_acc_adv = robust_eval(model=unlearn_model, data_loader=test_remain_loader,device=device)
+    train_forget_acc, train_forget_acc_adv = robust_eval(model=unlearn_model, data_loader=train_forget_loader, device=device)
+    train_remain_acc, train_remain_acc_adv = robust_eval(model=unlearn_model, data_loader=train_remain_loader, device=device)
+
     print('test acc:{:.2%}, forget acc:{:.2%}, remain acc:{:.2%}, train forget acc:{:.2%}, train remain acc:{:.2%}\n'
           .format(test_acc, forget_acc, remain_acc, train_forget_acc, train_remain_acc))
     print('test acc adv:{:.2%}, forget acc adv:{:.2%}, remain acc adv:{:.2%}, train forget acc adv:{:.2%}, train remain acc adv:{:.2%}'

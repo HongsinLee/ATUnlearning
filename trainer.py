@@ -74,10 +74,10 @@ def train_save_model(train_loader, test_loader, model_name, num_epochs, ATmethod
     for epo in range(num_epochs):
         model.train()
 
-        if ATmethod == 'PGD':
+        if epo == 0 or ATmethod == 'PGD':
             innerloss = torchattacks.PGD(model, eps=8/255, alpha=2/255, steps=10, random_start=True)
         elif ATmethod == 'TRADES':
-            innerloss = torchattacks.TPGD(model, eps=8/255, alpha=2/255, steps=10, random_start=True)
+            innerloss = torchattacks.TPGD(model, eps=8/255, alpha=2/255, steps=10)
         else:
             raise NotImplementedError
         
@@ -92,7 +92,7 @@ def train_save_model(train_loader, test_loader, model_name, num_epochs, ATmethod
                 optimizer.zero_grad()
                 output = model(inputs_adv) 
 
-                if ATmethod == 'PGD':
+                if epo == 0 or ATmethod == 'PGD':
                     criterion = nn.CrossEntropyLoss()
                     loss = criterion(output, batch_y)
                 elif ATmethod == 'TRADES':
@@ -151,7 +151,7 @@ def train_save_model(train_loader, test_loader, model_name, num_epochs, ATmethod
                 torch.save(model, '{}.pth'.format(path))
     end = time.time()
     print('training time:', end-start, 's')
-    return model, best_clean_acc, best_robust_acc
+    return best_clean_acc, best_robust_acc
 
 
 def test(model, loader):
@@ -231,7 +231,7 @@ def eval(model, data_loader, mode='backdoor', print_perform=False, device='cpu',
     return accuracy_score(y_true.cpu(), y_predict.cpu()), acc
 
 
-def robust_eval(model, data_loader, mode='backdoor', print_perform=False, device='cpu', name=''):
+def robust_eval(model, data_loader, mode='backdoor', device='cpu'):
     model.eval()  # switch to eval status
     torchattackPGD_eval = torchattacks.PGD(model, eps=8/255, alpha=2/255, steps=20, random_start=True)
     y_true = []
@@ -265,3 +265,4 @@ def robust_eval(model, data_loader, mode='backdoor', print_perform=False, device
     acc_adv = num_hits_adv / y_true.shape[0]
 
     return acc, acc_adv
+

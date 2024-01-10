@@ -51,8 +51,12 @@ if __name__ == '__main__':
         print('=' * 100)
         print(' ' * 25 + 'train original model from scratch')
         print('=' * 100)
-        ori_model, ori_clean_acc, ori_robust_acc = train_save_model(train_loader, test_loader, args.model_name,
+        ori_clean_acc, ori_robust_acc = train_save_model(train_loader, test_loader, args.model_name,
                                      args.epoch, args.ATmethod, device, path + "original_model", args)
+        
+        ori_model = torch.load('{}.pth'.format(path + "original_model"),
+                        map_location=torch.device('cpu')).to(device)
+        
         ori_model.eval()
         autoattack = AutoAttack(ori_model, norm='Linf', eps=8/255.0, version='standard')
 
@@ -70,21 +74,39 @@ if __name__ == '__main__':
         print('=' * 100)
         print(' ' * 25 + 'train retrained model from scratch')
         print('=' * 100)
-        retrain_model, retrain_clean_acc, retrain_robust_acc = train_save_model(train_remain_loader, test_remain_loader, args.model_name,
+        retrain_clean_acc, retrain_robust_acc = train_save_model(train_remain_loader, test_remain_loader, args.model_name,
                                          args.epoch, args.ATmethod, device, path + "forget" + str(args.forget_class) +"_retrain_model", args)
         
+        retrain_model = torch.load('{}.pth'.format(
+            path + "forget" + str(args.forget_class) +"_retrain_model"), map_location=torch.device('cpu')).to(device)
         retrain_model.eval()
         autoattack = AutoAttack(retrain_model, norm='Linf', eps=8/255.0, version='standard')
 
-        x_total = [x for (x, y) in test_loader]
-        y_total = [y for (x, y) in test_loader]
+        x_total = [x for (x, y) in test_remain_loader]
+        y_total = [y for (x, y) in test_remain_loader]
         x_total = torch.cat(x_total, 0)
         y_total = torch.cat(y_total, 0)
         _, AA_acc = autoattack.run_standard_evaluation(x_total, y_total)
 
-        print('\nretrain model(forgetting :{}) acc:{:.4f}, PGD acc: {:.4f}, AutoAttack acc: {}'.format(args.forget_class, retrain_clean_acc, retrain_robust_acc, AA_acc))
+        test_acc, test_acc_adv = robust_eval(model=retrain_model, data_loader=test_loader, device=device)
+        forget_acc, forget_acc_adv = robust_eval(model=retrain_model, data_loader=test_forget_loader,device=device)
+        remain_acc, remain_acc_adv = robust_eval(model=retrain_model, data_loader=test_remain_loader,device=device)
+        train_forget_acc, train_forget_acc_adv = robust_eval(model=retrain_model, data_loader=train_forget_loader, device=device)
+        train_remain_acc, train_remain_acc_adv = robust_eval(model=retrain_model, data_loader=train_remain_loader, device=device)
+
+        print('test acc:{:.2%}, forget acc:{:.2%}, remain acc:{:.2%}, train forget acc:{:.2%}, train remain acc:{:.2%}\n'
+            .format(test_acc, forget_acc, remain_acc, train_forget_acc, train_remain_acc))
+        print('test acc adv:{:.2%}, forget acc adv:{:.2%}, remain acc adv:{:.2%}, train forget acc adv:{:.2%}, train remain acc adv:{:.2%}'
+            .format(test_acc_adv, forget_acc_adv, remain_acc_adv, train_forget_acc_adv, train_remain_acc_adv))
+
+
+        print('\nretrain model(forgetting :{}) acc:{:.4f}, PGD acc: {:.4f}, AutoAttack acc: {:.4f}'.format(args.forget_class, retrain_clean_acc, retrain_robust_acc, AA_acc))
         file = open(path + "accuracy_summary.txt", 'a')
-        file.write('retrain model(forgetting :{})\t Clean acc:{:.4f}, PGD acc: {:.4f}, AutoAttack acc: {}\n'.format(args.forget_class, retrain_clean_acc, retrain_robust_acc, AA_acc))
+        file.write('retrain model(forgetting :{})\t Clean acc:{:.4f}, PGD acc: {:.4f}, AutoAttack acc: {:.4f}\n'.format(args.forget_class, retrain_clean_acc, retrain_robust_acc, AA_acc))
+        file.write('\t\t\t\t\t\t\t\t test acc:{:.2%}, forget acc:{:.2%}, remain acc:{:.2%}, train forget acc:{:.2%}, train remain acc:{:.2%}\n'
+            .format(test_acc, forget_acc, remain_acc, train_forget_acc, train_remain_acc))
+        file.write('\t\t\t\t\t\t\t\t test acc adv:{:.2%}, forget acc adv:{:.2%}, remain acc adv:{:.2%}, train forget acc adv:{:.2%}, train remain acc adv:{:.2%}'
+            .format(test_acc_adv, forget_acc_adv, remain_acc_adv, train_forget_acc_adv, train_remain_acc_adv))
         file.close()
 
     elif args.train_or_unlearning == "unlearning":
