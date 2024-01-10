@@ -1,6 +1,7 @@
 import argparse
 import numpy as np
 import boundary_unlearning
+import AT_unlearning
 from utils import *
 from trainer import *
 from autoattack import AutoAttack
@@ -18,8 +19,7 @@ def seed_torch(seed=2022):
 if __name__ == '__main__':
     seed_torch()
     parser = argparse.ArgumentParser("Boundary Unlearning")
-    parser.add_argument('--method', type=str, default='boundary_shrink',
-                        choices=['boundary_shrink', 'boundary_expanding'], help='unlearning method')
+    parser.add_argument('--method', type=str, default='boundary_shrink', help='unlearning method')
     parser.add_argument('--ATmethod', type=str, default='PGD', help='unlearning method')
     parser.add_argument('--unlearn_innerloss', type=str, default='FGSM', help='unlearning method')
     parser.add_argument('--unlearn_ATmethod', type=str, default='PGD', help='unlearning method')
@@ -39,7 +39,8 @@ if __name__ == '__main__':
     parser.add_argument('--extra_exp', type=str, help='optional extra experiment for boundary shrink',
                         choices=['curv', 'weight_assign', None])
     args = parser.parse_args()
-
+    print(args)
+    
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     create_dir(args.checkpoint_dir)
     create_dir(args.checkpoint_dir + '/' + args.data_name)
@@ -126,3 +127,19 @@ if __name__ == '__main__':
                                                                 test_forget_loader, test_remain_loader,
                                                                 train_remain_loader, args.optim_name, device,
                                                                 args.evaluation, path=path)
+            
+        elif args.method == 'AT_BS':
+            print('*' * 100)
+            print(' ' * 25 + 'begin AT boundary shrink unlearning')
+            print('*' * 100)
+            unlearn_model = AT_unlearning.AT_boundary_shrink(ori_model, train_forget_loader, trainset, testset,
+                                                                test_loader, device, forget_class=args.forget_class, 
+                                                                unlearn_innerloss= args.unlearn_innerloss, unlearn_ATmethod = args.unlearn_ATmethod, path=path)
+            
+        elif args.method == 'BS':
+            print('*' * 100)
+            print(' ' * 25 + 'begin boundary shrink unlearning')
+            print('*' * 100)
+            unlearn_model = AT_unlearning.boundary_shrink(ori_model, train_forget_loader, trainset, testset,
+                                                                test_loader, device, forget_class=args.forget_class, 
+                                                                unlearn_innerloss= args.unlearn_innerloss, unlearn_ATmethod = args.unlearn_ATmethod, path=path)

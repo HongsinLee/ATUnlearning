@@ -229,3 +229,39 @@ def eval(model, data_loader, mode='backdoor', print_perform=False, device='cpu',
         plt.show()
 
     return accuracy_score(y_true.cpu(), y_predict.cpu()), acc
+
+
+def robust_eval(model, data_loader, mode='backdoor', print_perform=False, device='cpu', name=''):
+    model.eval()  # switch to eval status
+    torchattackPGD_eval = torchattacks.PGD(model, eps=8/255, alpha=2/255, steps=20, random_start=True)
+    y_true = []
+    y_predict = []
+    y_predict_adv = []
+    for step, (batch_x, batch_y) in enumerate(data_loader):
+
+        batch_x = batch_x.to(device)
+        batch_y = batch_y.to(device)
+        inputs_adv = torchattackPGD_eval(batch_x, batch_y)
+        batch_y_predict = model(batch_x)
+        batch_y_predict_adv = model(inputs_adv)
+        if mode == 'pruned':
+            batch_y_predict = batch_y_predict[:, 0:10]
+            batch_y_predict_adv = batch_y_predict_adv[:, 0:10]
+        batch_y_predict = torch.argmax(batch_y_predict, dim=1)
+        batch_y_predict_adv = torch.argmax(batch_y_predict_adv, dim=1)
+        # batch_y = torch.argmax(batch_y, dim=1)
+        y_predict.append(batch_y_predict)
+        y_predict_adv.append(batch_y_predict_adv)
+        y_true.append(batch_y)
+
+    y_true = torch.cat(y_true, 0)
+    y_predict = torch.cat(y_predict, 0)
+    y_predict_adv = torch.cat(y_predict_adv, 0)
+
+    num_hits = (y_true == y_predict).float().sum()
+    num_hits_adv = (y_true == y_predict_adv).float().sum()
+
+    acc = num_hits / y_true.shape[0]
+    acc_adv = num_hits_adv / y_true.shape[0]
+
+    return acc, acc_adv
