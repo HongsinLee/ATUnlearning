@@ -1,5 +1,5 @@
-train_or_unlearning : train
-method : boundary_shrink
+train_or_unlearning : unlearning
+method : AT_BS
 ATmethod : PGD
 unlearn_innerloss : FGSM
 unlearn_ATmethod : PGD
