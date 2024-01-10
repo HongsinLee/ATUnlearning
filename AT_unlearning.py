@@ -42,7 +42,7 @@ def robust_evaluate(model, data_loader, device):
 
 
 def AT_boundary_shrink(ori_model, train_forget_loader, dt, dv, test_loader, device, evaluate = True,
-                    bound=0.1, poison_epoch=10, forget_class=0, unlearn_innerloss='FGSM', unlearn_ATmethod='PGD', path='./'):
+                    bound=0.1, poison_epoch=10, forget_class=0, unlearn_innerloss='FGSM', unlearn_ATmethod='PGD', path='./', args = None):
     
 
     test_model = copy.deepcopy(ori_model).to(device)
@@ -137,12 +137,22 @@ def AT_boundary_shrink(ori_model, train_forget_loader, dt, dv, test_loader, devi
           .format(test_acc, forget_acc, remain_acc, train_forget_acc, train_remain_acc))
     print('test acc adv:{:.2%}, forget acc adv:{:.2%}, remain acc adv:{:.2%}, train forget acc adv:{:.2%}, train remain acc adv:{:.2%}'
           .format(test_acc_adv, forget_acc_adv, remain_acc_adv, train_forget_acc_adv, train_remain_acc_adv))
+    
+    
+    if args.wand:
+        args.wand_log.log({'test_acc': test_acc, 'test_acc_adv': test_acc_adv})
+        args.wand_log.log({'forget_acc': forget_acc, 'forget_acc_adv': forget_acc_adv})
+        args.wand_log.log({'remain_acc': remain_acc, 'remain_acc_adv': remain_acc_adv})
+        args.wand_log.log({'train_forget_acc': train_forget_acc, 'train_forget_acc_adv': train_forget_acc_adv})
+        args.wand_log.log({'train_remain_acc': train_remain_acc, 'train_remain_acc_adv': train_remain_acc_adv})
+    
+    
     return unlearn_model
 
 
 
 def boundary_shrink(ori_model, train_forget_loader, dt, dv, test_loader, device, evaluate = True,
-                    bound=0.1, poison_epoch=10, forget_class=0, unlearn_innerloss='FGSM', unlearn_ATmethod='PGD', path='./'):
+                    bound=0.1, poison_epoch=10, forget_class=0, unlearn_innerloss='FGSM', unlearn_ATmethod='PGD', path='./', args = None):
     
 
     test_model = copy.deepcopy(ori_model).to(device)
@@ -211,5 +221,7 @@ def boundary_shrink(ori_model, train_forget_loader, dt, dv, test_loader, device,
                                device=device, name='train set remain class')
     print('test acc:{:.2%}, forget acc:{:.2%}, remain acc:{:.2%}, train forget acc:{:.2%}, train remain acc:{:.2%}'
           .format(test_acc, forget_acc, remain_acc, train_forget_acc, train_remain_acc))
+    
+    
 
     return unlearn_model

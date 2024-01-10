@@ -1,0 +1,25 @@
+train_or_unlearning : train
+method : boundary_shrink
+ATmethod : PGD
+unlearn_innerloss : FGSM
+unlearn_ATmethod : PGD
+data_name : cifar10
+model_name : ResNet18
+optim_name : sgd
+lr : 0.01
+epoch : 200
+batch_size : 128
+forget_class : 4
+base_dir : /mnt/server14_hard1/seungju/Research/ATUnlearning
+dataset_dir : /mnt/server14_hard1/seungju/dataset/CIFAR10
+checkpoint_dir : mnt/server14_hard1/seungju/Research/ATUnlearning/checkpoint
+wand : 1
+wandb_entity : robust-cil
+wandb_project : ATUnlearning
+wandb_name : default
+wandb_tags : exp
+
+
+
+
+ 

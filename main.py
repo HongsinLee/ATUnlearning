@@ -5,6 +5,8 @@ import AT_unlearning
 from utils import *
 from trainer import *
 from autoattack import AutoAttack
+import wandb
+import pdb
 
 
 def seed_torch(seed=2022):
@@ -18,28 +20,16 @@ def seed_torch(seed=2022):
 
 if __name__ == '__main__':
     seed_torch()
-    parser = argparse.ArgumentParser("Boundary Unlearning")
-    parser.add_argument('--method', type=str, default='boundary_shrink', help='unlearning method')
-    parser.add_argument('--ATmethod', type=str, default='PGD', help='unlearning method')
-    parser.add_argument('--unlearn_innerloss', type=str, default='FGSM', help='unlearning method')
-    parser.add_argument('--unlearn_ATmethod', type=str, default='PGD', help='unlearning method')
-    parser.add_argument('--data_name', type=str, default='cifar10', choices=['mnist', 'cifar10'],
-                        help='dataset, mnist or cifar10')
-    parser.add_argument('--model_name', type=str, default='ResNet18', choices=['MNISTNet', 'AllCNN', 'ResNet18'], help='model name')
-    parser.add_argument('--optim_name', type=str, default='sgd', choices=['sgd', 'adam'], help='optimizer name')
-    parser.add_argument('--lr', type=float, default=0.1, help='learning rate')
-    parser.add_argument('--epoch', type=int, default=200, help='training epoch')
-    parser.add_argument('--forget_class', type=int, default=4, help='forget class')
-    parser.add_argument('--dataset_dir', type=str, default='/mnt/server7_hard3/hongsin/dataset', help='dataset directory')
-    parser.add_argument('--checkpoint_dir', type=str, default='./checkpoints',
-                        help='checkpoints directory')
-    parser.add_argument('--batch_size', type=int, default=128, help='batch size')
-    parser.add_argument('--train_or_unlearning', type=str, help='Train model from scratch')
-    parser.add_argument('--evaluation', action='store_true', help='evaluate unlearn model')
-    parser.add_argument('--extra_exp', type=str, help='optional extra experiment for boundary shrink',
-                        choices=['curv', 'weight_assign', None])
-    args = parser.parse_args()
+    args = load_parser()
+    args = load_config(args)
     print(args)
+    
+    if args.wand:
+        assert wandb is not None, "Wandb not installed, please install it or run without wandb"
+        wandb.init(project=args.wandb_project, entity=args.wandb_entity, config=vars(args), name=args.wandb_name, tags=[args.wandb_tags])
+        args.wandb_url = wandb.run.get_url()
+        wandb.save(args.base_dir+'/config/' + args.config)
+        args.wand_log = wandb
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     create_dir(args.checkpoint_dir)
@@ -62,7 +52,7 @@ if __name__ == '__main__':
         print(' ' * 25 + 'train original model from scratch')
         print('=' * 100)
         ori_model, ori_clean_acc, ori_robust_acc = train_save_model(train_loader, test_loader, args.model_name,
-                                     args.epoch, args.ATmethod, device, path + "original_model")
+                                     args.epoch, args.ATmethod, device, path + "original_model", args)
         ori_model.eval()
         autoattack = AutoAttack(ori_model, norm='Linf', eps=8/255.0, version='standard')
 
@@ -81,7 +71,7 @@ if __name__ == '__main__':
         print(' ' * 25 + 'train retrained model from scratch')
         print('=' * 100)
         retrain_model, retrain_clean_acc, retrain_robust_acc = train_save_model(train_remain_loader, test_remain_loader, args.model_name,
-                                         args.epoch, args.ATmethod, device, path + "forget" + str(args.forget_class) +"_retrain_model")
+                                         args.epoch, args.ATmethod, device, path + "forget" + str(args.forget_class) +"_retrain_model", args)
         
         retrain_model.eval()
         autoattack = AutoAttack(retrain_model, norm='Linf', eps=8/255.0, version='standard')
@@ -118,7 +108,7 @@ if __name__ == '__main__':
             unlearn_model = boundary_unlearning.boundary_shrink(ori_model, train_forget_loader, trainset, testset,
                                                                 test_loader, device, args.evaluation,
                                                                 forget_class=args.forget_class, path=path,
-                                                                extra_exp=args.extra_exp)
+                                                                extra_exp=args.extra_exp, args = args)
         elif args.method == 'boundary_expanding':
             print('*' * 100)
             print(' ' * 25 + 'begin boundary expanding unlearning')
@@ -126,7 +116,7 @@ if __name__ == '__main__':
             unlearn_model = boundary_unlearning.boundary_expanding(ori_model, train_forget_loader, test_loader,
                                                                 test_forget_loader, test_remain_loader,
                                                                 train_remain_loader, args.optim_name, device,
-                                                                args.evaluation, path=path)
+                                                                args.evaluation, path=path, args = args)
             
         elif args.method == 'AT_BS':
             print('*' * 100)
@@ -134,7 +124,7 @@ if __name__ == '__main__':
             print('*' * 100)
             unlearn_model = AT_unlearning.AT_boundary_shrink(ori_model, train_forget_loader, trainset, testset,
                                                                 test_loader, device, forget_class=args.forget_class, 
-                                                                unlearn_innerloss= args.unlearn_innerloss, unlearn_ATmethod = args.unlearn_ATmethod, path=path)
+                                                                unlearn_innerloss= args.unlearn_innerloss, unlearn_ATmethod = args.unlearn_ATmethod, path=path, args = args)
             
         elif args.method == 'BS':
             print('*' * 100)
@@ -142,4 +132,4 @@ if __name__ == '__main__':
             print('*' * 100)
             unlearn_model = AT_unlearning.boundary_shrink(ori_model, train_forget_loader, trainset, testset,
                                                                 test_loader, device, forget_class=args.forget_class, 
-                                                                unlearn_innerloss= args.unlearn_innerloss, unlearn_ATmethod = args.unlearn_ATmethod, path=path)
+                                                                unlearn_innerloss= args.unlearn_innerloss, unlearn_ATmethod = args.unlearn_ATmethod, path=path, args = args)

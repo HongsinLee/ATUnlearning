@@ -13,7 +13,7 @@ from expand_exp import curvature, weight_assign
 
 def boundary_shrink(ori_model, train_forget_loader, dt, dv, test_loader, device, evaluate,
                     bound=0.1, step=8 / 255, iter=5, poison_epoch=10, forget_class=0, path='./',
-                    extra_exp=None, lambda_=0.7, bias=-0.5, slope=5.0):
+                    extra_exp=None, lambda_=0.7, bias=-0.5, slope=5.0, args = None):
     start = time.time()
     norm = True  # None#True if data_name != "mnist" else False
     random_start = False  # False if attack != "pgd" else True
@@ -99,7 +99,7 @@ def boundary_shrink(ori_model, train_forget_loader, dt, dv, test_loader, device,
 
 
 def boundary_expanding(ori_model, train_forget_loader, test_loader, test_forget_loader, test_remain_loader,
-                       train_remain_loader, optimization, device, evaluate, path='./',):
+                       train_remain_loader, optimization, device, evaluate, path='./', args = None):
     start = time.time()
 
     n_filter2 = int(192 * 0.5)

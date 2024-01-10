@@ -4,7 +4,9 @@ import torch
 from torch.utils.data import DataLoader, SubsetRandomSampler
 from torchvision import datasets
 import torchvision.transforms as transforms
-
+import argparse
+from pathlib import Path
+import yaml
 
 def create_dir(dir_name):
     if not os.path.exists(dir_name):
@@ -125,3 +127,63 @@ def get_forget_loader(dt, forget_class):
     remain_loader = torch.utils.data.DataLoader(dt, batch_size=8, shuffle=False,
                                                 sampler=torch.utils.data.SubsetRandomSampler(els_idx), drop_last=True)
     return forget_loader, remain_loader
+
+
+def load_parser():
+    parser = argparse.ArgumentParser("Boundary Unlearning")
+    parser.add_argument('--lr', type=float, default=0.1, help='learning rate')
+    parser.add_argument('--epoch', type=int, default=200, help='training epoch')
+    parser.add_argument('--batch_size', type=int, default=128, help='training epoch')
+
+
+    parser.add_argument('--evaluation', action='store_true', help='evaluate unlearn model')
+    parser.add_argument('--extra_exp', type=str, help='optional extra experiment for boundary shrink',
+                        choices=['curv', 'weight_assign', None])
+    
+    parser.add_argument('--config', type=str, default='default.yaml', help='config name')
+    parser.add_argument('--wand', type=int, default = -1)
+    parser.add_argument('--wandb_tags', type=str, default = 'None')
+    args = parser.parse_args()
+
+    return args
+
+
+def load_config(args):
+    path = Path(os.path.realpath(__file__))
+    path = str(path.parent.absolute())
+    root = path + "/config/" + args.config
+    with open(root) as file:
+        config = yaml.safe_load(file)
+    class dotdict(dict):
+        """dot.notation access to dictionary attributes"""
+        __getattr__ = dict.get
+        __setattr__ = dict.__setitem__
+        __delattr__ = dict.__delitem__
+
+    # def convert(s):
+    #     try:
+    #         return float(s)
+    #     except ValueError:
+            
+    #         return float(num) / float(denom)
+
+    config = dotdict(config)
+    # config.alpha = args.alpha if args.alpha != -1 else config.alpha
+    # config.beta = args.beta if args.beta != -1 else config.beta
+    # config.gamma = args.gamma if args.gamma != -1 else config.gamma
+    # config.eta = args.eta if args.eta != -1 else config.eta
+    # config.temperature = args.temperature if args.temperature != -1 else config.temperature
+    config.epoch = args.epoch if args.epoch != -1 else config.epochs
+    config.lr = args.lr if args.lr != -1 else config.lr
+    config.batch_size = args.batch_size if args.batch_size != -1 else config.batch_size
+    config.wand = args.wand if args.wand != -1 else config.wand
+    config.wandb_tags = args.wandb_tags if args.wandb_tags != "None" else config.wandb_tags
+    config.config = args.config
+    
+
+    # num, denom = config.eps.split('/')
+    # config.eps = float(num)/float(denom)
+    # num1,num2,num3 = config.step_size.split('/')
+    # config.step_size = (float(num1)/float(num2))/float(num3)
+
+    return config

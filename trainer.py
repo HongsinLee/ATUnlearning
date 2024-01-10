@@ -58,7 +58,7 @@ def train(model, data_loader, criterion, optimizer, device='cpu'):
     return running_loss
 
 
-def train_save_model(train_loader, test_loader, model_name, num_epochs, ATmethod, device, path):
+def train_save_model(train_loader, test_loader, model_name, num_epochs, ATmethod, device, path, args = None):
     start = time.time()
 
     num_classes = max(train_loader.dataset.targets) + 1  # if args.num_classes is None else args.num_classes
